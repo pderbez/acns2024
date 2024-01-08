@@ -9,7 +9,10 @@ GF_POLY := 0x11b
 GRBPATH = /opt/gurobi
 USERDEFINES := -DGF_POLY=$(GF_POLY)
 
+## flag Linux
 LDFLAGS := -L$(GRBPATH)/linux64/lib -lgurobi_c++ -lgurobi95 -ltbb -lm
+
+## flag MacOS
 #LDFLAGS := -L/Library/gurobi952/macos_universal2/lib -lgurobi_c++ -lgurobi95
 
 CXX      := -g++
