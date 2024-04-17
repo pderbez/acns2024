@@ -106,6 +106,7 @@ Matrix AES128eqs(unsigned R, int *KPerm, vector<vector<unsigned>> const & subkey
         vector<pair<GFElement, int>> v;
         v.emplace_back(1, 16*(3*rx + 2) + 4*lx + cx);
         v.emplace_back(1, 16*(3*r_roundk + 2) + 4*l + c_roundk);
+        sys.emplace_back(move(v));
       }
     }
   }

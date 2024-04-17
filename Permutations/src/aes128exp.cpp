@@ -80,9 +80,21 @@ vector<vector<unsigned>> modelAES128(int R, vector<int> & KPerm, int nrSboxesWan
         unsigned cx = x%nb_cols_perm;
         unsigned lx = x/nb_cols_perm;
         while (cx >= 4) {cx -= 4; rx += 1;}
-        if (rx < R) model.addConstr(dX[16*(3*rx + 2) + 4*lx + cx] == dX[16*(3*r_roundk + 2) + 4*l + c_roundk]);
+        if (rx < R) {
+          model.addConstr(dX[16*(3*rx + 2) + 4*lx + cx] == dX[16*(3*r_roundk + 2) + 4*l + c_roundk]);
+          //cout << r_roundk << ", " << c_roundk << ", " << l << " --> " << rx << ", " << cx << ", " << lx << endl;
+        }
       }
     }
+
+/*     for (auto const & v : subkeys) {
+      for (unsigned i = 0; i < size_perm; ++i) {
+        if (i % (size_perm/4) == 0) cout << endl;
+        cout << v[i] << " ";
+      }
+      cout << endl;
+    }
+    getchar(); */
 
 
     for (unsigned r = 1; r < R; ++r) {
@@ -149,6 +161,7 @@ vector<vector<unsigned>> modelAES128(int R, vector<int> & KPerm, int nrSboxesWan
     model.addConstr(obj <= nrSboxesWanted-1);
 
     auto mat = AES128eqs(R, KPerm.data(), subkeys);
+    //auto mat = AES128eqs(R, KPerm.data());
 
     mycallback cb ((3*R+1)*16, dX.data(), mat);
     model.setCallback(&cb);
@@ -547,6 +560,28 @@ void testBoomerang192(unsigned R) {
   modelAESBoomerang(R+1, KPerm, env);
 }
 
+void testPerm128(unsigned R) {
+  GRBEnv env = GRBEnv(true);
+  env.set("LogFile", "mip1.log");
+  env.start();
+  
+  //vector<int> KPerm ({5, 6, 7, 4, 8, 9, 10, 11, 12, 13, 14, 15, 2, 3, 0, 1});
+  //vector<int> KPerm ({15, 1, 9, 6, 0, 14, 3, 4, 8, 5, 2, 7, 12, 13, 10, 11});
+  //vector<int> KPerm ({2, 10, 9, 5, 4, 1, 6, 3, 13, 8, 14, 11, 15, 12, 0, 7});
+  //vector<int> KPerm ({6, 0, 4, 9, 13, 10, 8, 3, 7, 12, 15, 14, 11, 5, 1, 2});
+  vector<int> KPerm ({3, 15, 11, 8, 2, 1, 10, 5, 4, 0, 9, 7, 6, 12, 13, 14});
+  
+  unsigned nsbox = 1;
+  while (modelAES128(R, KPerm, nsbox, env).empty()) ++nsbox;
+  cout << "nsbox: " << nsbox-1 << endl;
+  auto vres = modelAES128(R, KPerm, nsbox, env);
+  for (auto const & v : vres) {
+   for (auto const x : v) cout << x << " ";
+   cout << "| ";
+  }
+  cout << endl;
+}
+
 
 void searchMILP(vector<pair<unsigned, unsigned>> const & myconstraints, int size_perm) {
   GRBEnv env = GRBEnv(true);
@@ -928,6 +963,8 @@ int main(int argc, char const *argv[]) {
     //searchMILP(vector<pair<unsigned, unsigned>>({make_pair(9, 22)}), 32);
 
     //testBoomerang256(11);
+    
+    testPerm128(stoi(argv[1]));
 
     vector<pair<unsigned, unsigned>> constraints;
     unsigned size_perm = stoi(argv[1]);
