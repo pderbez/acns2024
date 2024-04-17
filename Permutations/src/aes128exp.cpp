@@ -683,11 +683,15 @@ void testPerm128(unsigned R) {
   //vector<int> KPerm ({15, 1, 9, 6, 0, 14, 3, 4, 8, 5, 2, 7, 12, 13, 10, 11});
   //vector<int> KPerm ({2, 10, 9, 5, 4, 1, 6, 3, 13, 8, 14, 11, 15, 12, 0, 7});
   //vector<int> KPerm ({6, 0, 4, 9, 13, 10, 8, 3, 7, 12, 15, 14, 11, 5, 1, 2});
-  vector<int> KPerm ({3, 15, 11, 8, 2, 1, 10, 5, 4, 0, 9, 7, 6, 12, 13, 14});
+  //vector<int> KPerm ({3, 15, 11, 8, 2, 1, 10, 5, 4, 0, 9, 7, 6, 12, 13, 14});
+
+  //vector<int> KPerm ({2,17,19,9,13,12,23,0,4,21,18,16,10,20,22,1,11,3,7,5,15,6,14,8});
+
+  vector<int> KPerm ({27,16,9,25,11,13,14,18,22,21,19,23,28,31,29,3,2,15,8,24,17,1,26,0,7,20,10,4,6,30,12,5});
   
   unsigned nsbox = modelAESMinSboxes(R, KPerm, env);
   cout << "nsbox: " << nsbox << endl;
-  auto vres = modelAES128(R, KPerm, nsbox, env);
+  auto vres = modelAES128(R, KPerm, nsbox+1, env);
   for (auto const & v : vres) {
    for (auto const x : v) cout << x << " ";
    cout << "| ";
@@ -1077,7 +1081,7 @@ int main(int argc, char const *argv[]) {
 
     //testBoomerang256(11);
     
-    testPerm128(stoi(argv[1]));
+    //testPerm128(stoi(argv[1]));
 
     vector<pair<unsigned, unsigned>> constraints;
     unsigned size_perm = stoi(argv[1]);
