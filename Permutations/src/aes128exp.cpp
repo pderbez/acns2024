@@ -17,6 +17,120 @@ void printPerm(vector<int> & P) {
     cout << " " << endl;
 }
 
+unsigned modelAESMinSboxes(int R, vector<int> & KPerm, GRBEnv & env) {
+
+    GRBModel model = GRBModel(env);
+
+    auto const & size_perm = KPerm.size();
+    auto const & nb_cols_perm = size_perm/4;
+
+
+    // X = 3r + 0
+    // S(X) = -(3*r + 0)
+    // Y (after MC) = 3*r + 1
+    // K = 3*r + 2
+
+    // definition of variables
+    vector<GRBVar> dX ((3*R + 1)*16); // before ARK
+
+    for (unsigned i = 0; i < (3*R+1)*16; ++i) {
+        dX[i] = model.addVar(0.0, 1.0, 0.0, GRB_BINARY);
+    }
+
+    for (unsigned i = 0; i < 3*16; ++i) {
+      model.addConstr(dX[i] == 0);
+    }
+
+    vector<vector<unsigned>> subkeys;
+
+    {
+      vector<unsigned> v (size_perm);
+      for (unsigned x = 0; x < size_perm; ++x) v[x] = x;
+      subkeys.emplace_back(v);
+      while (size_perm*subkeys.size() < 16*R) {
+        vector<unsigned> vv (size_perm);
+        for (unsigned i = 0; i < size_perm; ++i) vv[KPerm[i]] = v[i];
+        subkeys.emplace_back(vv);
+        v = move(vv);
+      }
+    }
+
+    for (unsigned c = 4; c < 4*R; ++c) {
+      unsigned r_roundk = c/4;
+      unsigned c_roundk = c%4;
+      unsigned r_subk = (c-4)/nb_cols_perm;
+      unsigned c_subk = (c-4)%nb_cols_perm;
+      if (r_subk == 0) continue;
+      for (unsigned l = 0; l < 4; ++l) {
+        unsigned x = subkeys[r_subk][c_subk + nb_cols_perm*l];
+        unsigned rx = 1;
+        unsigned cx = x%nb_cols_perm;
+        unsigned lx = x/nb_cols_perm;
+        while (cx >= 4) {cx -= 4; rx += 1;}
+        if (rx < R) {
+          model.addConstr(dX[16*(3*rx + 2) + 4*lx + cx] == dX[16*(3*r_roundk + 2) + 4*l + c_roundk]);
+        }
+      }
+    }
+
+
+    for (unsigned r = 1; r < R; ++r) {
+      for (unsigned c = 0; c < 4; ++c) {
+        GRBLinExpr e = 0;
+        for (unsigned i = 0; i < 4; ++i) e += dX[16*(3*r + 1)  + c  + 4*i];
+        for (unsigned i = 0; i < 4; ++i) e += dX[16*(3*r + 0) + ((c + i)%4) + 4*i];
+        GRBVar f = model.addVar(0.0, 1.0, 0.0, GRB_BINARY);
+        model.addConstr(e <= 8*f);
+        model.addConstr(e >= 5*f);
+      }
+    }
+
+    for (unsigned r = 1; r < R ; ++r) {
+      //ARK (sX[r+1], kX[r+1] and zX[r+1])
+      for (unsigned i = 0; i < 16; ++i) {
+        model.addConstr(1-dX[16*(3*r + 1)  + i] + dX[16*(3*r + 2)  + i] + dX[16*(3*(r+1))  + i] >= 1);
+        model.addConstr(dX[16*(3*r + 1)  + i] + 1-dX[16*(3*r + 2)  + i] + dX[16*(3*(r+1))  + i] >= 1);
+        model.addConstr(dX[16*(3*r + 1)  + i] + dX[16*(3*r + 2)  + i] + 1-dX[16*(3*(r+1))  + i] >= 1);
+      }
+    }
+
+    GRBLinExpr obj = 0;
+    for (unsigned r = 1; r <= R; ++r) {
+      for (unsigned i = 0; i < 16; ++i) obj += dX[16*(3*r) + i];
+    }
+
+    model.setObjective(obj, GRB_MINIMIZE);
+
+
+
+    model.addConstr(obj >= 1);
+
+    auto mat = AES128eqs(R, KPerm.data(), subkeys);
+    //auto mat = AES128eqs(R, KPerm.data());
+
+    mycallback cb ((3*R+1)*16, dX.data(), mat);
+    model.setCallback(&cb);
+    model.set(GRB_IntParam_OutputFlag , 0);
+    model.set(GRB_IntParam_LazyConstraints , 1);
+    // model.set(GRB_IntParam_PoolSolutions, 2000000);
+    // model.set(GRB_DoubleParam_PoolGap, 0.001);
+    // model.set(GRB_IntParam_PoolSearchMode, 2);
+
+    //printPerm(KPerm);
+
+    model.optimize();
+
+    auto nSolutions = model.get(GRB_IntAttr_SolCount);
+
+    if (nSolutions > 0) {
+
+      return model.getObjective().getValue();
+
+    }
+
+    return 0;
+}
+
 vector<vector<unsigned>> modelAES128(int R, vector<int> & KPerm, int nrSboxesWanted, GRBEnv & env) {
 
     GRBModel model = GRBModel(env);
@@ -571,9 +685,8 @@ void testPerm128(unsigned R) {
   //vector<int> KPerm ({6, 0, 4, 9, 13, 10, 8, 3, 7, 12, 15, 14, 11, 5, 1, 2});
   vector<int> KPerm ({3, 15, 11, 8, 2, 1, 10, 5, 4, 0, 9, 7, 6, 12, 13, 14});
   
-  unsigned nsbox = 1;
-  while (modelAES128(R, KPerm, nsbox, env).empty()) ++nsbox;
-  cout << "nsbox: " << nsbox-1 << endl;
+  unsigned nsbox = modelAESMinSboxes(R, KPerm, env);
+  cout << "nsbox: " << nsbox << endl;
   auto vres = modelAES128(R, KPerm, nsbox, env);
   for (auto const & v : vres) {
    for (auto const x : v) cout << x << " ";
